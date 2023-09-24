@@ -12,8 +12,10 @@ DIALOG = f'{DATA_PATH}/dialog.ui'
 SETTINGS = f'{DATA_PATH}/settings.json'
 RIGPORT='127.0.0.1:4532'
 HEADER_LABELS=['Activator','Frequency','Age']
+
 SPOTURL='https://api.pota.app/spot/activator'
 USERURL='https://api.pota.app/stats/user'
+SPOTTINGURL='https://api.pota.app/spot' 
 
 uix=100
 uiy=100        
@@ -55,23 +57,31 @@ class MainWindow(QtWidgets.QMainWindow):
                     uiy=int(self.settings['y'])
 
     def setTRX(self,row,column):
-        dfrow = self.sorted_df.loc[self.sorted_df['activator'] == self.spotlist.item(row, 0).text()]
-        freq = int(float(dfrow['frequency'].values[0])*1000)
-        mode = dfrow['mode'].values[0]
+        try:
+            dfrow = self.sorted_df.loc[self.sorted_df['activator'] == self.spotlist.item(row, 0).text()]
+            freq = int(float(dfrow['frequency'].values[0])*1000)
+            mode = dfrow['mode'].values[0]
 
-        if mode == 'CW':
-            self.rig.set_mode(Hamlib.RIG_MODE_CW)
-        elif mode == 'SSB':
-            if freq < 10000:
-                self.rig.set_mode(Hamlib.RIG_MODE_LSB)
+            modifiers = QtWidgets.QApplication.keyboardModifiers()
+            if modifiers == QtCore.Qt.ShiftModifier:
+                self.markAsHunted(dfrow)
+                return
+
+            if mode == 'CW':
+                self.rig.set_mode(Hamlib.RIG_MODE_CW)
+            elif mode == 'SSB':
+                if freq < 10000:
+                    self.rig.set_mode(Hamlib.RIG_MODE_LSB)
+                else:
+                    self.rig.set_mode(Hamlib.RIG_MODE_USB)
+            elif mode == 'FM':
+                self.rig.set_mode(Hamlib.RIG_MODE_FM)
             else:
                 self.rig.set_mode(Hamlib.RIG_MODE_USB)
-        elif mode == 'FM':
-            self.rig.set_mode(Hamlib.RIG_MODE_FM)
-        else:
-            self.rig.set_mode(Hamlib.RIG_MODE_USB)
 
-        self.rig.set_freq(Hamlib.RIG_VFO_CURR,int(freq))
+            self.rig.set_freq(Hamlib.RIG_VFO_CURR,int(freq))
+        except Exception as e:
+            print(f'Error setTRX(): {e}')
 
     def getIcon(self, activator):
         icon = QPixmap()
@@ -92,6 +102,13 @@ class MainWindow(QtWidgets.QMainWindow):
             self.settings['x']=uix
             self.settings['y']=uiy
             json.dump(self.settings,f)
+
+    def markAsHunted(self, dfrow):
+        try:
+            payload = '{'+f'"activator":"{dfrow["activator"].values[0]}","spotter":"{self.settings["mycall"]}","frequency":"{dfrow["frequency"].values[0]}","reference":"{dfrow["reference"].values[0]}","mode":"{dfrow["mode"].values[0]}","source":"Web","comments":""'+'}'
+            r = requests.post(SPOTTINGURL, data=payload)
+        except Exception as e:
+            print(f'Error markAsHunted(): {e}')
 
     def getBandFromFrequency(self,frequency):
         if 1800 <= frequency <= 2000:
@@ -153,8 +170,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 try:
                     resp = requests.get(url=SPOTURL)
                     df = pd.read_json(resp.text)
-                    self.sorted_df = df.sort_values(by=['expire'], ascending=False)
-                    
+                    self.sorted_df = df.sort_values(by=['expire'], ascending=False)                   
                     self.iconlist = []
                     for index, row in self.sorted_df.iterrows():
                         band = self.getBandFromFrequency(row['frequency'])
