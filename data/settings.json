@@ -1,0 +1,1 @@
+{"mycall":"DM5KA","rigport": "127.0.0.1:4532", "x": 1610, "y": 697, "bands": {"160m": true, "80m": true, "60m": true, "40m": true, "30m": true, "20m": true, "17m": true, "15m": true, "12m": true, "10m": true, "6m": true, "2m": false, "70cm": false, "OOB": false}, "modes": {"CW": true, "SSB": false, "FM": false, "FT8": false, "FT4": false, "JS8": false, "RTTY": false}}
