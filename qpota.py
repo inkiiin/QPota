@@ -2,16 +2,18 @@
 import requests, sys, os, time, threading, json
 import Hamlib
 import atexit
+import socket
 import pandas as pd
 from PyQt5 import QtCore, QtWidgets, uic
 from PyQt5.QtCore import QDir, QLocale, QRect, QTimer
-from PyQt5.QtGui import QFontDatabase, QIcon, QImage, QPixmap
+from PyQt5.QtGui import QFontDatabase, QIcon, QImage, QPixmap, QColor
 
 DATA_PATH = f'{os.path.dirname(os.path.abspath(__file__))}/data'
 DIALOG = f'{DATA_PATH}/dialog.ui'
 SETTINGS = f'{DATA_PATH}/settings.json'
 RIGPORT='127.0.0.1:4532'
 HEADER_LABELS=['Activator','Frequency','Age']
+
 
 SPOTURL='https://api.pota.app/spot/activator'
 USERURL='https://api.pota.app/stats/user'
@@ -26,6 +28,7 @@ class MainWindow(QtWidgets.QMainWindow):
     sorted_df = []
     rigport = RIGPORT
     settings = []
+    lastclickedactivator =""
     
     def __init__(self, parent=None):
         """Initialize class variables"""
@@ -37,6 +40,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.spotlist.cellClicked.connect(self.setTRX) 
         self.spotlist.setColumnCount(3)
         self.spotlist.setHorizontalHeaderLabels(HEADER_LABELS)
+        #hamlib
         Hamlib.rig_set_debug(Hamlib.RIG_DEBUG_NONE)
         self.rig = Hamlib.Rig(Hamlib.RIG_MODEL_NETRIGCTL)
         self.rig.state.rigport.pathname = self.rigport
@@ -54,10 +58,32 @@ class MainWindow(QtWidgets.QMainWindow):
                 if self.settings['x']!=None:
                     uix=int(self.settings['x'])
                 if self.settings['y']!=None:
-                    uiy=int(self.settings['y'])
+                    uiy=int(self.settings['y'])   
+
+    def colorizeCall(self, call):
+        try:
+            for row in range(self.spotlist.rowCount()): 
+                self.spotlist.item(row, 0).setBackground( QColor('#404040'))
+                self.spotlist.item(row, 1).setBackground( QColor('#404040'))
+                self.spotlist.item(row, 2).setBackground( QColor('#404040'))
+
+            if(self.lastclickedactivator!=''):
+                
+                itms=self.spotlist.findItems(call,QtCore.Qt.MatchFlag.MatchContains)
+                print(itms)
+                if itms:
+                    row=itms[0].row()
+                    if row>=0:
+                        self.spotlist.item(row, 0).setBackground( QColor('#005500'))
+                        self.spotlist.item(row, 1).setBackground( QColor('#005500'))
+                        self.spotlist.item(row, 2).setBackground( QColor('#005500'))
+        except Exception as e:
+            print(f'Error colorizeCall(): {e}')
 
     def setTRX(self,row,column):
         try:
+            self.lastclickedactivator = self.spotlist.item(row, 0).text()
+            self.colorizeCall(self.spotlist.item(row, 0).text())
             dfrow = self.sorted_df.loc[self.sorted_df['activator'] == self.spotlist.item(row, 0).text()]
             freq = int(float(dfrow['frequency'].values[0])*1000)
             mode = dfrow['mode'].values[0]
@@ -157,7 +183,9 @@ class MainWindow(QtWidgets.QMainWindow):
                             self.spotlist.setItem(irow, 1, QtWidgets.QTableWidgetItem(f"{row['frequency']}"))
                             self.spotlist.setItem(irow, 2, QtWidgets.QTableWidgetItem(f"{1800-row['expire']}s"))
                             irow+=1
+                self.colorizeCall(self.lastclickedactivator)
                 self.dataAvailable=False
+            
             uix=self.x()
             uiy=self.y()
 
@@ -179,7 +207,8 @@ class MainWindow(QtWidgets.QMainWindow):
                                 itm = QtWidgets.QTableWidgetItem()
                                 itm.setIcon(self.getIcon(f"{row['activator']}".split('/')[0]))
                                 self.iconlist.append(itm)      
-                    self.dataAvailable=True     
+                    if len(self.iconlist)!=0:
+                        self.dataAvailable=True     
                     time.sleep(30)
                 except Exception as e:
                     print(f'Error workerThread(): {e}')
@@ -195,6 +224,8 @@ timer.timeout.connect(window.refreshSpotList)
 
 x = threading.Thread(target=window.workerThread, daemon=True)
 x.start()
+
+
 atexit.register(window.saveUIPosition)
 
 def run():
