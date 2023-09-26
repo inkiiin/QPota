@@ -70,7 +70,6 @@ class MainWindow(QtWidgets.QMainWindow):
             if(self.lastclickedactivator!=''):
                 
                 itms=self.spotlist.findItems(call,QtCore.Qt.MatchFlag.MatchContains)
-                print(itms)
                 if itms:
                     row=itms[0].row()
                     if row>=0:
