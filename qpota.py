@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import requests, sys, os, time, threading, json
-import Hamlib
 import atexit
 import socket
 import pandas as pd
@@ -11,7 +10,7 @@ from PyQt5.QtGui import QFontDatabase, QIcon, QImage, QPixmap, QColor
 DATA_PATH = f'{os.path.dirname(os.path.abspath(__file__))}/data'
 DIALOG = f'{DATA_PATH}/dialog.ui'
 SETTINGS = f'{DATA_PATH}/settings.json'
-RIGPORT='127.0.0.1:4532'
+RIGPORT='127.0.0.1:4533'
 HEADER_LABELS=['Activator','Frequency','Age']
 
 
@@ -22,6 +21,7 @@ SPOTTINGURL='https://api.pota.app/spot'
 uix=100
 uiy=100        
 
+print (DATA_PATH)
 class MainWindow(QtWidgets.QMainWindow):
     dataAvailable = False
     iconlist = []
@@ -40,11 +40,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.spotlist.cellClicked.connect(self.setTRX) 
         self.spotlist.setColumnCount(3)
         self.spotlist.setHorizontalHeaderLabels(HEADER_LABELS)
-        #hamlib
-        Hamlib.rig_set_debug(Hamlib.RIG_DEBUG_NONE)
-        self.rig = Hamlib.Rig(Hamlib.RIG_MODEL_NETRIGCTL)
-        self.rig.state.rigport.pathname = self.rigport
-        self.rig.open()
 
     def loadSettings(self):
         global uix
@@ -87,24 +82,27 @@ class MainWindow(QtWidgets.QMainWindow):
             freq = int(float(dfrow['frequency'].values[0])*1000)
             mode = dfrow['mode'].values[0]
 
+            CMD = 'V VFOA '
             modifiers = QtWidgets.QApplication.keyboardModifiers()
             if modifiers == QtCore.Qt.ShiftModifier:
                 self.markAsHunted(dfrow)
                 return
-
+                
             if mode == 'CW':
-                self.rig.set_mode(Hamlib.RIG_MODE_CW)
+                CMD += 'M CW 500 ' 
             elif mode == 'SSB':
                 if freq < 10000:
-                    self.rig.set_mode(Hamlib.RIG_MODE_LSB)
+                    CMD += 'M LSB 2700 '
                 else:
-                    self.rig.set_mode(Hamlib.RIG_MODE_USB)
+                    CMD += 'M USB 2700 '
             elif mode == 'FM':
-                self.rig.set_mode(Hamlib.RIG_MODE_FM)
+                CMD += 'M FM 15000 '
             else:
-                self.rig.set_mode(Hamlib.RIG_MODE_USB)
+                CMD += 'M USB 2700 '
 
-            self.rig.set_freq(Hamlib.RIG_VFO_CURR,int(freq))
+            CMD += f'F {int(freq)}'
+            
+            os.system(f'rigctl -m 2 -r {self.rigport} {CMD}')
         except Exception as e:
             print(f'Error setTRX(): {e}')
 
@@ -163,6 +161,28 @@ class MainWindow(QtWidgets.QMainWindow):
         if 420000 <= frequency <= 450000:
             return '70cm'
         return 'OOB'
+    
+    def getModeFromSpot(self,mode):
+        if mode == 'CW':
+            return 'CW'
+        if mode == 'SSB':
+            return 'SSB'
+        if mode == 'FM':
+            return 'FM'
+        if mode == 'AM':
+            return 'AM'
+        if mode == 'RTTY':
+            return 'RTTY'
+        if mode == 'JT9':
+            return 'DIG'
+        if mode == 'JS8':
+            return 'DIG'
+        if mode == 'FT8':
+            return 'DIG'
+        if mode == 'FT4':
+            return 'DIG'
+        return ''
+    
 
     def refreshSpotList(self):
         global uix
@@ -174,8 +194,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.spotlist.clearContents()
                 for index, row in self.sorted_df.iterrows():
                     band = self.getBandFromFrequency(row['frequency'])
-                    if self.settings['bands'][band] and row['mode']!='':
-                        if self.settings['modes'][row['mode']]:
+                    mode = self.getModeFromSpot(row['mode'])
+                    if self.settings['bands'][band] and mode!='':
+                        if self.settings['modes'][mode]:
                             self.spotlist.setRowCount(irow+1)
                             self.spotlist.setVerticalHeaderItem(irow, self.iconlist[irow])
                             self.spotlist.setItem(irow, 0, QtWidgets.QTableWidgetItem(f"{row['activator']}"))
@@ -201,8 +222,9 @@ class MainWindow(QtWidgets.QMainWindow):
                     self.iconlist = []
                     for index, row in self.sorted_df.iterrows():
                         band = self.getBandFromFrequency(row['frequency'])
-                        if self.settings['bands'][band] and row['mode']!='':
-                            if self.settings['modes'][row['mode']]:
+                        mode = self.getModeFromSpot(row['mode'])
+                        if self.settings['bands'][band] and mode!='':
+                            if self.settings['modes'][mode]:
                                 itm = QtWidgets.QTableWidgetItem()
                                 itm.setIcon(self.getIcon(f"{row['activator']}".split('/')[0]))
                                 self.iconlist.append(itm)      
