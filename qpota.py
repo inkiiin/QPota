@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import requests, sys, os, time, threading, json
+import requests, sys, os, time, threading, json, io
 import atexit
 import socket
 import pandas as pd
@@ -17,6 +17,7 @@ HEADER_LABELS=['Activator','Frequency','Age']
 SPOTURL='https://api.pota.app/spot/activator'
 USERURL='https://api.pota.app/stats/user'
 SPOTTINGURL='https://api.pota.app/spot' 
+HUNTEDURL='https://api.pota.app/spot/hunted'
 
 uix=100
 uiy=100        
@@ -112,12 +113,21 @@ class MainWindow(QtWidgets.QMainWindow):
         resp = requests.get(url=f"{USERURL}/{activator}")
         if resp.status_code == 200:
             activatorid=resp.json()['gravatar']
-            resp = requests.get(url=f"https://www.gravatar.com/avatar/{activatorid}?s=32&d=identicon")
+            resp = requests.get(url=f'https://www.gravatar.com/avatar/{activatorid}?s=32&d=identicon')
             if resp.status_code == 200:
                 icon = QPixmap()
                 icon.loadFromData(resp.content)
                 ico = QIcon(icon)
         return ico
+    
+    def getHunted(self, activator, reference, mode, band):
+        resp = requests.get(url=f'{HUNTEDURL}/{self.settings["mycall"]}')
+        if resp.status_code == 200:
+            df_hunted = pd.read_json(io.StringIO(resp.text))
+            for index, row in df_hunted.iterrows():
+                if row["activator"]==activator and row["reference"]==reference and row["mode"]==mode and row["band"]==band:
+                    return True
+        return False
             
     def saveUIPosition(self):
         with open(SETTINGS,'w') as f:
@@ -172,7 +182,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if mode == 'AM':
             return 'AM'
         if mode == 'RTTY':
-            return 'RTTY'
+            return 'DIG'
         if mode == 'JT9':
             return 'DIG'
         if mode == 'JS8':
@@ -181,8 +191,16 @@ class MainWindow(QtWidgets.QMainWindow):
             return 'DIG'
         if mode == 'FT4':
             return 'DIG'
-        return ''
+        return 'OTHER'
     
+    def shouldAdd(self, row):
+        band = self.getBandFromFrequency(row['frequency'])
+        mode = self.getModeFromSpot(row['mode'])
+        if self.settings['bands'][band] and row['reference']!='':
+            if self.settings['modes'][mode]:
+                if not self.getHunted(row['activator'],row['reference'],row['mode'],self.getBandFromFrequency(int(row['frequency']))):
+                    return True
+        return False
 
     def refreshSpotList(self):
         global uix
@@ -193,16 +211,13 @@ class MainWindow(QtWidgets.QMainWindow):
                 irow=0
                 self.spotlist.clearContents()
                 for index, row in self.sorted_df.iterrows():
-                    band = self.getBandFromFrequency(row['frequency'])
-                    mode = self.getModeFromSpot(row['mode'])
-                    if self.settings['bands'][band] and mode!='':
-                        if self.settings['modes'][mode]:
-                            self.spotlist.setRowCount(irow+1)
-                            self.spotlist.setVerticalHeaderItem(irow, self.iconlist[irow])
-                            self.spotlist.setItem(irow, 0, QtWidgets.QTableWidgetItem(f"{row['activator']}"))
-                            self.spotlist.setItem(irow, 1, QtWidgets.QTableWidgetItem(f"{row['frequency']}"))
-                            self.spotlist.setItem(irow, 2, QtWidgets.QTableWidgetItem(f"{1800-row['expire']}s"))
-                            irow+=1
+                    if self.shouldAdd(row):
+                        self.spotlist.setRowCount(irow+1)
+                        self.spotlist.setVerticalHeaderItem(irow, self.iconlist[irow])
+                        self.spotlist.setItem(irow, 0, QtWidgets.QTableWidgetItem(f"{row['activator']}"))
+                        self.spotlist.setItem(irow, 1, QtWidgets.QTableWidgetItem(f"{row['frequency']}"))
+                        self.spotlist.setItem(irow, 2, QtWidgets.QTableWidgetItem(f"{1800-row['expire']}s"))
+                        irow+=1
                 self.colorizeCall(self.lastclickedactivator)
                 self.dataAvailable=False
             
@@ -217,17 +232,14 @@ class MainWindow(QtWidgets.QMainWindow):
             if self.dataAvailable==False:
                 try:
                     resp = requests.get(url=SPOTURL)
-                    df = pd.read_json(resp.text)
+                    df = pd.read_json(io.StringIO(resp.text))     
                     self.sorted_df = df.sort_values(by=['expire'], ascending=False)                   
                     self.iconlist = []
                     for index, row in self.sorted_df.iterrows():
-                        band = self.getBandFromFrequency(row['frequency'])
-                        mode = self.getModeFromSpot(row['mode'])
-                        if self.settings['bands'][band] and mode!='':
-                            if self.settings['modes'][mode]:
-                                itm = QtWidgets.QTableWidgetItem()
-                                itm.setIcon(self.getIcon(f"{row['activator']}".split('/')[0]))
-                                self.iconlist.append(itm)      
+                        if self.shouldAdd(row):
+                            itm = QtWidgets.QTableWidgetItem()
+                            itm.setIcon(self.getIcon(f"{row['activator']}".split('/')[0]))
+                            self.iconlist.append(itm)      
                     if len(self.iconlist)!=0:
                         self.dataAvailable=True     
                     time.sleep(30)
