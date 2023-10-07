@@ -30,6 +30,7 @@ class MainWindow(QtWidgets.QMainWindow):
     rigport = RIGPORT
     settings = []
     lastclickedactivator =""
+    imidiateRefresh=False
     
     def __init__(self, parent=None):
         """Initialize class variables"""
@@ -121,12 +122,9 @@ class MainWindow(QtWidgets.QMainWindow):
         return ico
     
     def getHunted(self, activator, reference, mode, band):
-        resp = requests.get(url=f'{HUNTEDURL}/{self.settings["mycall"]}')
-        if resp.status_code == 200:
-            df_hunted = pd.read_json(io.StringIO(resp.text))
-            for index, row in df_hunted.iterrows():
-                if row["activator"]==activator and row["reference"]==reference and row["mode"]==mode and row["band"]==band:
-                    return True
+        for index, row in self.df_hunted.iterrows():
+            if row["activator"]==activator and row["reference"]==reference and row["mode"]==mode and row["band"]==band:
+                return True
         return False
             
     def saveUIPosition(self):
@@ -140,6 +138,10 @@ class MainWindow(QtWidgets.QMainWindow):
         try:
             payload = '{'+f'"activator":"{dfrow["activator"].values[0]}","spotter":"{self.settings["mycall"]}","frequency":"{dfrow["frequency"].values[0]}","reference":"{dfrow["reference"].values[0]}","mode":"{dfrow["mode"].values[0]}","source":"Web","comments":""'+'}'
             r = requests.post(SPOTTINGURL, data=payload)
+            if r.status_code == 200:
+                self.imidiateRefresh=True
+                self.lastclickedactivator=''
+                
         except Exception as e:
             print(f'Error markAsHunted(): {e}')
 
@@ -198,8 +200,9 @@ class MainWindow(QtWidgets.QMainWindow):
         mode = self.getModeFromSpot(row['mode'])
         if self.settings['bands'][band] and row['reference']!='':
             if self.settings['modes'][mode]:
-                if not self.getHunted(row['activator'],row['reference'],row['mode'],self.getBandFromFrequency(int(row['frequency']))):
-                    return True
+                if not "QRT" in row['comments'].upper():
+                    if not self.getHunted(row['activator'],row['reference'],row['mode'],self.getBandFromFrequency(int(row['frequency']))):
+                        return True
         return False
 
     def refreshSpotList(self):
@@ -231,18 +234,26 @@ class MainWindow(QtWidgets.QMainWindow):
         while 1:
             if self.dataAvailable==False:
                 try:
+                    resp = requests.get(url=f'{HUNTEDURL}/{self.settings["mycall"]}')
+                    if resp.status_code == 200:
+                        self.df_hunted = pd.read_json(io.StringIO(resp.text))
                     resp = requests.get(url=SPOTURL)
-                    df = pd.read_json(io.StringIO(resp.text))     
-                    self.sorted_df = df.sort_values(by=['expire'], ascending=False)                   
-                    self.iconlist = []
-                    for index, row in self.sorted_df.iterrows():
-                        if self.shouldAdd(row):
-                            itm = QtWidgets.QTableWidgetItem()
-                            itm.setIcon(self.getIcon(f"{row['activator']}".split('/')[0]))
-                            self.iconlist.append(itm)      
-                    if len(self.iconlist)!=0:
-                        self.dataAvailable=True     
-                    time.sleep(30)
+                    if resp.status_code == 200:
+                        df = pd.read_json(io.StringIO(resp.text))     
+                        self.sorted_df = df.sort_values(by=['expire'], ascending=False)                  
+                        self.iconlist = []
+                        for index, row in self.sorted_df.iterrows():
+                            if self.shouldAdd(row):
+                                itm = QtWidgets.QTableWidgetItem()
+                                itm.setIcon(self.getIcon(f"{row['activator']}".split('/')[0]))
+                                self.iconlist.append(itm)      
+                        if len(self.iconlist)!=0:
+                            self.dataAvailable=True  
+                    self.imidiateRefresh=False
+                    self.timecounter=30
+                    if self.timecounter > 0 and not self.imidiateRefresh:   
+                        time.sleep(1)
+                        self.timecounter-=1
                 except Exception as e:
                     print(f'Error workerThread(): {e}')
             time.sleep(1)
