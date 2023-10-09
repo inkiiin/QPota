@@ -22,7 +22,6 @@ HUNTEDURL='https://api.pota.app/spot/hunted'
 uix=100
 uiy=100        
 
-print (DATA_PATH)
 class MainWindow(QtWidgets.QMainWindow):
     dataAvailable = False
     iconlist = []
@@ -31,6 +30,7 @@ class MainWindow(QtWidgets.QMainWindow):
     settings = []
     lastclickedactivator =""
     imidiateRefresh=False
+    lastcmd= 'V VFOA M CW 500 F 7033000'
     
     def __init__(self, parent=None):
         """Initialize class variables"""
@@ -38,6 +38,14 @@ class MainWindow(QtWidgets.QMainWindow):
         uic.loadUi(DIALOG, self)
         self.loadSettings()
         self.move(uix,uiy)
+        self.btn_5w = self.findChild(QtWidgets.QPushButton, "btn_5w")
+        self.btn_5w.clicked.connect(self.setPower_5w)
+        self.btn_20w = self.findChild(QtWidgets.QPushButton, "btn_20w")
+        self.btn_20w.clicked.connect(self.setPower_20w)
+        self.btn_100w = self.findChild(QtWidgets.QPushButton, "btn_100w")
+        self.btn_100w.clicked.connect(self.setPower_100w)
+        self.btn_tune = self.findChild(QtWidgets.QPushButton, "btn_tune")
+        self.btn_tune.clicked.connect(self.setTune)
         self.spotlist = self.findChild(QtWidgets.QTableWidget, "tableWidget")
         self.spotlist.cellClicked.connect(self.setTRX) 
         self.spotlist.setColumnCount(3)
@@ -104,9 +112,37 @@ class MainWindow(QtWidgets.QMainWindow):
 
             CMD += f'F {int(freq)}'
             
+            self.lastcmd=CMD
+            
             os.system(f'rigctl -m 2 -r {self.rigport} {CMD}')
         except Exception as e:
             print(f'Error setTRX(): {e}')
+
+    def setPower_5w(self):
+        self.setPower(5)
+    
+    def setPower_20w(self):
+        self.setPower(20)
+        
+    def setPower_100w(self):
+        self.setPower(100)
+        
+    def setPower(self, power):
+        try:
+            CMD = f'L RFPOWER {float(power/100.0)}'
+            print (CMD)
+            os.system(f'rigctl -m 2 -r {self.rigport} {CMD}')
+            
+        except Exception as e:
+            print(f'Error setPower(): {e}')
+    
+    def setTune(self):
+        os.system(f'rigctl -m 2 -r {self.rigport} M AM 0')
+        self.setPower_20w()
+        os.system(f'rigctl -m 2 -r {self.rigport} T 1')
+        time.sleep(3)
+        os.system(f'rigctl -m 2 -r {self.rigport} T 0')
+        os.system(f'rigctl -m 2 -r {self.rigport} {self.lastcmd}')
 
     def getIcon(self, activator):
         icon = QPixmap()
@@ -247,8 +283,8 @@ class MainWindow(QtWidgets.QMainWindow):
                                 itm = QtWidgets.QTableWidgetItem()
                                 itm.setIcon(self.getIcon(f"{row['activator']}".split('/')[0]))
                                 self.iconlist.append(itm)      
-                        if len(self.iconlist)!=0:
-                            self.dataAvailable=True  
+                        #if len(self.iconlist)!=0:
+                    self.dataAvailable=True  
                     self.imidiateRefresh=False
                     self.timecounter=30
                     if self.timecounter > 0 and not self.imidiateRefresh:   
