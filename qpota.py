@@ -130,7 +130,6 @@ class MainWindow(QtWidgets.QMainWindow):
     def setPower(self, power):
         try:
             CMD = f'L RFPOWER {float(power/100.0)}'
-            print (CMD)
             os.system(f'rigctl -m 2 -r {self.rigport} {CMD}')
             
         except Exception as e:
@@ -249,6 +248,7 @@ class MainWindow(QtWidgets.QMainWindow):
             if self.dataAvailable:
                 irow=0
                 self.spotlist.clearContents()
+                self.spotlist.setRowCount(0)
                 for index, row in self.sorted_df.iterrows():
                     if self.shouldAdd(row):
                         self.spotlist.setRowCount(irow+1)
@@ -257,7 +257,7 @@ class MainWindow(QtWidgets.QMainWindow):
                         self.spotlist.setItem(irow, 1, QtWidgets.QTableWidgetItem(f"{row['frequency']}"))
                         self.spotlist.setItem(irow, 2, QtWidgets.QTableWidgetItem(f"{1800-row['expire']}s"))
                         irow+=1
-                self.colorizeCall(self.lastclickedactivator)
+                        self.colorizeCall(self.lastclickedactivator)
                 self.dataAvailable=False
             
             uix=self.x()
@@ -283,7 +283,6 @@ class MainWindow(QtWidgets.QMainWindow):
                                 itm = QtWidgets.QTableWidgetItem()
                                 itm.setIcon(self.getIcon(f"{row['activator']}".split('/')[0]))
                                 self.iconlist.append(itm)      
-                        #if len(self.iconlist)!=0:
                     self.dataAvailable=True  
                     self.imidiateRefresh=False
                     self.timecounter=30
