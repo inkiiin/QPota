@@ -38,14 +38,18 @@ class MainWindow(QtWidgets.QMainWindow):
         uic.loadUi(DIALOG, self)
         self.loadSettings()
         self.move(uix,uiy)
-        self.btn_5w = self.findChild(QtWidgets.QPushButton, "btn_5w")
-        self.btn_5w.clicked.connect(self.setPower_5w)
-        self.btn_20w = self.findChild(QtWidgets.QPushButton, "btn_20w")
-        self.btn_20w.clicked.connect(self.setPower_20w)
-        self.btn_100w = self.findChild(QtWidgets.QPushButton, "btn_100w")
-        self.btn_100w.clicked.connect(self.setPower_100w)
-        self.btn_tune = self.findChild(QtWidgets.QPushButton, "btn_tune")
-        self.btn_tune.clicked.connect(self.setTune)
+        self.btn_CALL = self.findChild(QtWidgets.QPushButton, "btn_CALL")
+        self.btn_CALL.clicked.connect(self.send_mycall)
+        self.btn_GM= self.findChild(QtWidgets.QPushButton, "btn_GM")
+        self.btn_GM.clicked.connect(self.send_gm)
+        self.btn_GA = self.findChild(QtWidgets.QPushButton, "btn_GA")
+        self.btn_GA.clicked.connect(self.send_ga)
+        self.btn_EE = self.findChild(QtWidgets.QPushButton, "btn_EE")
+        self.btn_EE.clicked.connect(self.send_ee)
+        self.btn_15 = self.findChild(QtWidgets.QPushButton, "btn_15")
+        self.btn_15.clicked.connect(self.setSpeed_15)
+        self.btn_20 = self.findChild(QtWidgets.QPushButton, "btn_20")
+        self.btn_20.clicked.connect(self.setSpeed_20)
         self.spotlist = self.findChild(QtWidgets.QTableWidget, "tableWidget")
         self.spotlist.cellClicked.connect(self.setTRX) 
         self.spotlist.setColumnCount(3)
@@ -64,6 +68,8 @@ class MainWindow(QtWidgets.QMainWindow):
                     uix=int(self.settings['x'])
                 if self.settings['y']!=None:
                     uiy=int(self.settings['y'])   
+                if self.settings['mycall']!=None:
+                    self.btn_CALL.setText(self.settings["mycall"]) 
 
     def colorizeCall(self, call):
         try:
@@ -134,6 +140,40 @@ class MainWindow(QtWidgets.QMainWindow):
             
         except Exception as e:
             print(f'Error setPower(): {e}')
+
+    def setSpeed_15(self):
+        self.setSpeed(15)
+
+    def setSpeed_20(self):
+        self.setSpeed(20)
+
+    def setSpeed(self, speed):
+        try:
+            CMD = f'L KEYSPD {speed}'
+            os.system(f'rigctl -m 2 -r {self.rigport} {CMD}')
+            
+        except Exception as e:
+            print(f'Error setSpeed(): {e}')
+    
+    def send_mycall(self):
+        self.sendMorse(self.settings["mycall"])
+
+    def send_gm(self):
+        self.sendMorse(f'BK GM UR 55N 55N 73 TU')
+
+    def send_ga(self):
+        self.sendMorse(f'BK GA UR 55N 55N 73 TU')
+
+    def send_ee(self):
+        self.sendMorse(f'EE')
+    
+    def sendMorse(self, text):
+        try:
+            CMD = f'b "{text}"'
+            os.system(f'rigctl -m 2 -r {self.rigport} {CMD}')
+            
+        except Exception as e:
+            print(f'Error sendMorse(): {e}')
     
     def setTune(self):
         os.system(f'rigctl -m 2 -r {self.rigport} M AM 0')
